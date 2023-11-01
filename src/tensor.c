@@ -8,6 +8,8 @@ typedef struct{
 	float *arr;
 }tensor;
 
+static PyTypeObject tensor_type;
+
 static PyObject *tensor_new(PyTypeObject *type,PyObject *args,PyObject *kwds){
 	tensor *obj;
 	obj = (tensor*)type->tp_alloc(type,0);
@@ -17,9 +19,13 @@ static PyObject *tensor_new(PyTypeObject *type,PyObject *args,PyObject *kwds){
 
 static int tensor_init(tensor *self,PyObject *args,PyObject *kwds){
 	int len;
-	if(!PyArg_ParseTuple(args,"i",&len)){
+	if(PyLong_Check(args)){
+		len = PyLong_AsLong(args);
+	}
+	else if(!PyArg_ParseTuple(args,"i",&len)){
 		return -1;
 	}
+
 	self->len = len;
 	self->arr = malloc(len * sizeof(float));
 	
@@ -104,7 +110,7 @@ static int tensor_setitem(tensor *self,PyObject *key,PyObject *val){
 
 	_key = PyLong_AsLong(key);
 
-	if(_key > self->len){
+	if(_key >= self->len){
 		PyErr_SetString(PyExc_TypeError,"Index out of bounds!");
 		return -1;
 	}
@@ -114,9 +120,31 @@ static int tensor_setitem(tensor *self,PyObject *key,PyObject *val){
 	return 0;
 }
 
+static tensor* tensor_add(tensor *t1,tensor *t2){
+	if(t1->len != t2->len){
+		PyErr_SetString(PyExc_TypeError,"Dimensions do not match!");
+		return NULL;
+	}
+
+	tensor *ans = (tensor*)tensor_new(&tensor_type,NULL,NULL);
+	if(tensor_init(ans,Py_BuildValue("i",t1->len),NULL)){
+		return NULL;
+	}
+
+	for(int i=0;i<t1->len;++i){
+		ans->arr[i] = t1->arr[i] + t2->arr[i];
+	}
+
+	return ans;
+}
+
 static PyMethodDef tensor_methods[] = {
 	{"name",(PyObject* (*)(PyObject*,PyObject*))tensor_str,METH_NOARGS,"name of tensor object"},
 	{NULL}
+};
+
+static PyNumberMethods tensor_number = {
+	.nb_add = (PyObject* (*)(PyObject*,PyObject*))tensor_add,
 };
 
 static PySequenceMethods tensor_sequence = {
@@ -140,6 +168,7 @@ static PyTypeObject tensor_type = {
 	.tp_members = tensor_members,
 	.tp_methods = tensor_methods,
 	.tp_str = (PyObject * (*)(PyObject *))tensor_str,
+	.tp_as_number = &tensor_number,
 	.tp_as_sequence = &tensor_sequence,
 	.tp_as_mapping = &tensor_mapping,
 };
